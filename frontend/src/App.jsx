@@ -77,6 +77,7 @@ export default function App() {
     </aside>
 
     <section className="main-content" id="overview">
+      {activePage === "futures" ? <FuturesAnalysis /> : <>
       <header className="topbar">
         <div><div className="breadcrumb">Workspace <span>/</span> Overview</div><h1>Market overview</h1></div>
         <div className="topbar-right"><span className="data-pill"><i /> Public market data</span><button className="refresh-button" onClick={refresh} disabled={loading}><span className={loading ? 'spin' : ''}>↻</span> Refresh</button></div>
@@ -121,6 +122,7 @@ export default function App() {
 
       <section className="methodology-panel" id="methodology"><div><span className="eyebrow">HOW THE ENGINE WORKS</span><h2>Confluence, not certainty.</h2><p>EdgePilot combines trend, momentum, volatility, volume and swing-structure context across multiple timeframes. Scores are descriptive and must be validated against historical data before drawing conclusions.</p></div><div className="method-tags"><span>EMA 20 / 50</span><span>RSI 14</span><span>MACD</span><span>ATR 14</span><span>Relative volume</span><span>Swing structure</span></div></section>
       <footer className="footer"><span>EDGE PILOT © 2026</span><span>Local research workspace</span></footer>
+      </>}
     </section>
   </main>
 }
