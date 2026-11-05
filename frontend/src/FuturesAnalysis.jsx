@@ -158,6 +158,18 @@ export default function FuturesAnalysis() {
     open_interest: liveTicker?.openInterest ?? derivatives.open_interest
   }
   const biasClass = analysis?.bias === 'Bullish' ? 'positive' : analysis?.bias === 'Bearish' ? 'negative' : ''
+  const tf = analysis?.timeframes || {}
+  const longOutlook = analysis?.bias === 'Bullish' && Number(analysis?.score) >= 30 && tf['4H']?.bias === 'Bullish' && tf['1H']?.bias === 'Bullish' && tf['15M']?.bias !== 'Bearish'
+  const shortOutlook = analysis?.bias === 'Bearish' && Number(analysis?.score) <= -30 && tf['4H']?.bias === 'Bearish' && tf['1H']?.bias === 'Bearish' && tf['15M']?.bias !== 'Bullish'
+  const outlook = !analysis ? 'WAIT' : longOutlook ? 'LONG BIAS' : shortOutlook ? 'SHORT BIAS' : 'WAIT'
+  const outlookTone = longOutlook ? 'positive' : shortOutlook ? 'negative' : ''
+  const outlookReasons = !analysis ? ['Waiting for enough candle data to calculate the market context.'] : [
+    'Weighted confluence: ' + signed(analysis.score, 0) + '/100 (' + (analysis.bias || 'Neutral') + ')',
+    'Higher timeframes: 4H ' + (tf['4H']?.bias || '—') + ' · 1H ' + (tf['1H']?.bias || '—'),
+    '15M / 5M: ' + (tf['15M']?.bias || '—') + ' / ' + (tf['5M']?.bias || '—'),
+    'RSI ' + fmt(analysis.rsi, 1) + ' · EMA20 ' + fmt(analysis.ema20) + ' · EMA50 ' + fmt(analysis.ema50),
+    'Structure: ' + (analysis.structure || 'Unavailable') + ' · ATR ' + fmt(analysis.atr_percent, 2) + '%'
+  ]
 
   useEffect(() => {
     localStorage.setItem('edgepilot.paper.positions', JSON.stringify(paperPositions))
@@ -257,6 +269,19 @@ export default function FuturesAnalysis() {
       <div className="panel-heading"><div><h2>Perpetual price movement</h2><p>Recent closing prices · {intervals.find(x => x.value === interval)?.label}</p></div><span className={'live-label ' + (feedStatus === 'LIVE' ? 'feed-live' : '')}><i /> {feedStatus}</span></div>
       <div className="chart-wrap">{loading && !candles.length ? <div className="chart-empty">Loading futures market data…</div> : <FuturesChart candles={candles} />}</div>
       <div className="chart-footer"><span>{candles.length ? new Date(candles[0].timestamp * 1000).toLocaleString() : '—'}</span><span>{latest ? new Date(latest.timestamp * 1000).toLocaleString() : '—'}</span></div>
+    </section>
+
+    <section className="outlook-panel">
+      <div className="outlook-main">
+        <span className="eyebrow">EDGE PILOT · MARKET OUTLOOK</span>
+        <div className="outlook-title-row"><h2 className={outlookTone}>{outlook}</h2><span className="outlook-mode">PAPER RESEARCH ONLY</span></div>
+        <p>{longOutlook ? 'Bullish conditions are aligned across the higher timeframes. Treat this as a directional scenario for study, not an instruction to trade.' : shortOutlook ? 'Bearish conditions are aligned across the higher timeframes. Treat this as a directional scenario for study, not an instruction to trade.' : 'The required trend and timeframe confirmations are not aligned. Waiting is the most neutral assessment until the market context improves.'}</p>
+      </div>
+      <div className="outlook-details">
+        <div className="outlook-detail-head"><b>WHY THIS ASSESSMENT?</b><span>Updated with analysis refresh</span></div>
+        <ul>{outlookReasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
+        <small>Confluence thresholds are rules-based filters, not a tested forecast or success probability. No real orders are placed.</small>
+      </div>
     </section>
 
     <section className="metrics-grid futures-metrics">
