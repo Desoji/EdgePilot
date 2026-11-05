@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
+import FuturesAnalysis from './FuturesAnalysis.jsx'
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
@@ -30,6 +31,7 @@ function Metric({ label, value, detail }) {
 }
 
 export default function App() {
+  const [activePage, setActivePage] = useState('overview')
   const [symbol, setSymbol] = useState('BTCUSDT')
   const [interval, setInterval] = useState('15')
   const [data, setData] = useState(null)
@@ -70,7 +72,7 @@ export default function App() {
     <aside className="sidebar">
       <a className="brand" href="#overview"><span className="brand-mark">E</span><span>edgepilot<span className="brand-dot">.</span></span></a>
       <div className="side-label">WORKSPACE</div>
-      <nav className="side-nav"><a className="nav-item active" href="#overview">◫ &nbsp; Overview</a><a className="nav-item" href="#analysis">⌁ &nbsp; Market analysis</a><a className="nav-item" href="#methodology">◎ &nbsp; Methodology</a></nav>
+      <nav className="side-nav"><button className={activePage === 'overview' ? 'nav-item active' : 'nav-item'} onClick={() => setActivePage('overview')}>◫ &nbsp; Overview</button><button className={activePage === 'futures' ? 'nav-item active' : 'nav-item'} onClick={() => setActivePage('futures')}>⌁ &nbsp; Futures analysis</button></nav>
       <div className="sidebar-bottom"><div className="local-status"><i /> Local workspace</div><p>Research first.<br />Validate every assumption.</p><span>EDGE PILOT · PREVIEW</span></div>
     </aside>
 
