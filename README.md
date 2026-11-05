@@ -83,6 +83,12 @@ The dashboard includes a Futures Analysis page backed by `GET /api/futures/analy
 
 The Futures page opens a public WebSocket connection to `wss://stream.bybit.com/v5/public/linear` and subscribes to the selected contract's ticker, order book, public trades and kline stream. It reconnects after a dropped connection and clears/re-subscribes when the contract or interval changes. This is public read-only market data; the position panel does not represent exchange positions.
 
+
+
+### Paper position manager
+
+The Futures page includes a browser-local paper position manager. It supports simulated long/short entries at the currently displayed public price, quantity, optional stop-loss and take-profit levels, automatic simulated exits when the live price reaches those levels, manual simulated closes, unrealised/realised P&L and a recent closed-position history. Open positions and history are stored in the browser's local storage. P&L is simplified and excludes fees, funding, slippage and liquidation mechanics. No exchange order is submitted and no account credentials are used.
+
 ## Hybrid analysis endpoint
 
 The research API also exposes GET /api/market/hybrid?symbol=BTCUSDT. It retrieves 4H, 1H, 15M and 5M candles and returns weighted descriptive context using EMA alignment, RSI, confirmed swing pivots, basic trend classification, break-of-structure context and relative volume. Pivots are only considered after the configured right-side confirmation candles have elapsed. The score is not a probability, prediction guarantee or instruction to trade.
