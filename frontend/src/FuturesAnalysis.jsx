@@ -144,6 +144,13 @@ export default function FuturesAnalysis() {
   const change = latest && previous ? (latest.close - previous.close) / previous.close * 100 : null
   const analysis = data?.analysis
   const derivatives = data?.derivatives || {}
+  const liveDerivatives = {
+    ...derivatives,
+    mark_price: liveTicker?.markPrice ?? derivatives.mark_price,
+    index_price: liveTicker?.indexPrice ?? derivatives.index_price,
+    funding_rate: liveTicker?.fundingRate ?? derivatives.funding_rate,
+    open_interest: liveTicker?.openInterest ?? derivatives.open_interest
+  }
   const biasClass = analysis?.bias === 'Bullish' ? 'positive' : analysis?.bias === 'Bearish' ? 'negative' : ''
 
   return <div className="futures-page">
@@ -174,10 +181,10 @@ export default function FuturesAnalysis() {
     </section>
 
     <section className="metrics-grid futures-metrics">
-      <FuturesMetric label="MARK PRICE" value={fmt(derivatives.mark_price, 2)} detail="Exchange-reported mark price · USDT" />
-      <FuturesMetric label="INDEX PRICE" value={fmt(derivatives.index_price, 2)} detail="Underlying index reference · USDT" />
-      <FuturesMetric label="FUNDING RATE" value={derivatives.funding_rate == null ? '—' : signed(derivatives.funding_rate * 100, 4) + '%'} detail="Current rate · next settlement is exchange-defined" />
-      <FuturesMetric label="OPEN INTEREST" value={derivatives.open_interest == null ? '—' : fmt(derivatives.open_interest, 2)} detail="Displayed in contract units by provider" />
+      <FuturesMetric label="MARK PRICE" value={fmt(liveDerivatives.mark_price, 2)} detail="Exchange-reported mark price · USDT" />
+      <FuturesMetric label="INDEX PRICE" value={fmt(liveDerivatives.index_price, 2)} detail="Underlying index reference · USDT" />
+      <FuturesMetric label="FUNDING RATE" value={liveDerivatives.funding_rate == null ? '—' : signed(liveDerivatives.funding_rate * 100, 4) + '%'} detail="Current rate · next settlement is exchange-defined" />
+      <FuturesMetric label="OPEN INTEREST" value={liveDerivatives.open_interest == null ? '—' : fmt(liveDerivatives.open_interest, 2)} detail="Displayed in contract units by provider" />
     </section>
 
 
