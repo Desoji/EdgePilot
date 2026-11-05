@@ -140,7 +140,7 @@ async def get_candles(client: httpx.AsyncClient, symbol: str, interval: str,
     try:
         response = await client.get(
             f"{BYBIT_URL}/v5/market/kline",
-            params={"category": "spot", "symbol": symbol, "interval": interval, "limit": limit},
+            params={"category": category, "symbol": symbol, "interval": interval, "limit": limit},
             timeout=15.0,
         )
         response.raise_for_status()
