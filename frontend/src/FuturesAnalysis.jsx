@@ -287,7 +287,7 @@ export default function FuturesAnalysis() {
         <div className="card-title-row"><div><h3>Paper position manager</h3><span className="tiny-tag">Local simulation · No exchange orders</span></div><span className="tiny-tag">{paperPositions.length} open</span></div>
         <div className="paper-summary">
           <div><small>UNREALISED P&amp;L · {symbol}</small><b className={paperOpenPnl >= 0 ? 'positive' : 'negative'}>{signed(paperOpenPnl, 4)} USDT</b></div>
-          <div><small>REALised P&amp;L · HISTORY</small><b className={paperRealisedPnl >= 0 ? 'positive' : 'negative'}>{signed(paperRealisedPnl, 4)} USDT</b></div>
+          <div><small>REALISED P&amp;L · HISTORY</small><b className={paperRealisedPnl >= 0 ? 'positive' : 'negative'}>{signed(paperRealisedPnl, 4)} USDT</b></div>
         </div>
         <div className="paper-form">
           <label>Quantity<input type="number" min="0.000001" step="any" value={paperQty} onChange={e => setPaperQty(e.target.value)} /></label>
