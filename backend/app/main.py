@@ -7,6 +7,8 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.backtesting.engine import run_ema_backtest
+
 BYBIT_URL = "https://api.bybit.com"
 VALID_INTERVALS = {"5", "15", "60", "240"}
 TIMEFRAMES = [("240", "4H"), ("60", "1H"), ("15", "15M"), ("5", "5M")]
@@ -213,3 +215,23 @@ async def market_overview(
         "analysis": {**latest_reading, "bias": overall_bias, "score": combined, "timeframes": tf_context},
         "disclaimer": "Educational market context only. Not a trade signal or probability of success.",
     }
+
+
+@app.get("/api/backtest")
+async def backtest(
+    symbol: str = Query("BTCUSDT", min_length=5, max_length=20, pattern="^[A-Z0-9]+$"),
+    interval: str = Query("60"),
+    limit: int = Query(500, ge=100, le=1000),
+    starting_balance: float = Query(10000.0, gt=0, le=100000000),
+) -> dict[str, Any]:
+    if interval not in VALID_INTERVALS:
+        raise HTTPException(status_code=400, detail="Interval must be 5, 15, 60 or 240.")
+    async with httpx.AsyncClient() as client:
+        candles = await get_candles(client, symbol, interval, limit)
+    if len(candles) < 52:
+        raise HTTPException(status_code=502, detail="Insufficient candle history for backtesting.")
+    try:
+        result = run_ema_backtest(candles, starting_balance=starting_balance)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"symbol": symbol, "interval": interval, "candles_tested": len(candles), **result}
