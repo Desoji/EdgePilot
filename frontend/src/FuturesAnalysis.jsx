@@ -37,6 +37,12 @@ export default function FuturesAnalysis() {
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] })
   const [recentTrades, setRecentTrades] = useState([])
   const [feedStatus, setFeedStatus] = useState('CONNECTING')
+  const [paperPositions, setPaperPositions] = useState(() => { try { return JSON.parse(localStorage.getItem('edgepilot.paper.positions') || '[]') } catch { return [] } })
+  const [paperHistory, setPaperHistory] = useState(() => { try { return JSON.parse(localStorage.getItem('edgepilot.paper.history') || '[]') } catch { return [] } })
+  const [paperQty, setPaperQty] = useState('0.001')
+  const [paperStop, setPaperStop] = useState('')
+  const [paperTarget, setPaperTarget] = useState('')
+  const [paperMessage, setPaperMessage] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -153,6 +159,84 @@ export default function FuturesAnalysis() {
   }
   const biasClass = analysis?.bias === 'Bullish' ? 'positive' : analysis?.bias === 'Bearish' ? 'negative' : ''
 
+  useEffect(() => {
+    localStorage.setItem('edgepilot.paper.positions', JSON.stringify(paperPositions))
+  }, [paperPositions])
+
+  useEffect(() => {
+    localStorage.setItem('edgepilot.paper.history', JSON.stringify(paperHistory.slice(0, 50)))
+  }, [paperHistory])
+
+  useEffect(() => {
+    if (!displayedPrice || !Number.isFinite(displayedPrice)) return
+    setPaperPositions(current => {
+      const stillOpen = []
+      const newlyClosed = []
+      for (const position of current) {
+        if (position.symbol !== symbol) {
+          stillOpen.push(position)
+          continue
+        }
+        const hitStop = position.stopLoss != null && (position.side === 'LONG' ? displayedPrice <= position.stopLoss : displayedPrice >= position.stopLoss)
+        const hitTarget = position.takeProfit != null && (position.side === 'LONG' ? displayedPrice >= position.takeProfit : displayedPrice <= position.takeProfit)
+        if (!hitStop && !hitTarget) {
+          stillOpen.push(position)
+          continue
+        }
+        const exitPrice = hitStop ? position.stopLoss : position.takeProfit
+        const direction = position.side === 'LONG' ? 1 : -1
+        newlyClosed.push({ ...position, exitPrice, exitTime: new Date().toISOString(), closeReason: hitStop ? 'Stop-loss' : 'Take-profit', realisedPnl: (exitPrice - position.entryPrice) * position.quantity * direction })
+      }
+      if (newlyClosed.length) setPaperHistory(history => [...newlyClosed, ...history].slice(0, 50))
+      return stillOpen
+    })
+  }, [displayedPrice, symbol])
+
+  const openPaperPosition = side => {
+    const quantity = Number(paperQty)
+    const stop = paperStop.trim() === '' ? null : Number(paperStop)
+    const target = paperTarget.trim() === '' ? null : Number(paperTarget)
+    if (!displayedPrice || !Number.isFinite(displayedPrice)) {
+      setPaperMessage('Waiting for a live market price.')
+      return
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setPaperMessage('Enter a quantity greater than zero.')
+      return
+    }
+    if ((stop != null && (!Number.isFinite(stop) || stop <= 0)) || (target != null && (!Number.isFinite(target) || target <= 0))) {
+      setPaperMessage('Stop-loss and take-profit must be valid positive prices.')
+      return
+    }
+    if (side === 'LONG' && ((stop != null && stop >= displayedPrice) || (target != null && target <= displayedPrice))) {
+      setPaperMessage('For a simulated LONG, stop-loss must be below entry and take-profit above entry.')
+      return
+    }
+    if (side === 'SHORT' && ((stop != null && stop <= displayedPrice) || (target != null && target >= displayedPrice))) {
+      setPaperMessage('For a simulated SHORT, stop-loss must be above entry and take-profit below entry.')
+      return
+    }
+    const position = { id: String(Date.now()), symbol, side, quantity, entryPrice: displayedPrice, stopLoss: stop, takeProfit: target, openedAt: new Date().toISOString() }
+    setPaperPositions(current => [position, ...current])
+    setPaperMessage('Paper position opened. No exchange order was sent.')
+  }
+
+  const closePaperPosition = id => {
+    const position = paperPositions.find(item => item.id === id)
+    if (!position || !displayedPrice) return
+    const direction = position.side === 'LONG' ? 1 : -1
+    const closed = { ...position, exitPrice: displayedPrice, exitTime: new Date().toISOString(), closeReason: 'Manual close', realisedPnl: (displayedPrice - position.entryPrice) * position.quantity * direction }
+    setPaperPositions(current => current.filter(item => item.id !== id))
+    setPaperHistory(current => [closed, ...current].slice(0, 50))
+    setPaperMessage('Paper position closed at the current displayed price.')
+  }
+
+  const paperOpenPnl = paperPositions.reduce((total, position) => {
+    if (position.symbol !== symbol || !displayedPrice) return total
+    return total + (displayedPrice - position.entryPrice) * position.quantity * (position.side === 'LONG' ? 1 : -1)
+  }, 0)
+  const paperRealisedPnl = paperHistory.reduce((total, position) => total + Number(position.realisedPnl || 0), 0)
+
   return <div className="futures-page">
     <header className="topbar">
       <div><div className="breadcrumb">Workspace <span>/</span> Futures</div><h1>Futures analysis</h1></div>
@@ -203,9 +287,27 @@ export default function FuturesAnalysis() {
           {!recentTrades.length && <div className="chart-empty">Waiting for public trades…</div>}
         </div>
       </article>
+
       <article className="live-panel position-monitor">
-        <div className="card-title-row"><div><h3>Position monitor</h3><span className="tiny-tag">Paper environment</span></div><span className="tiny-tag">No active positions</span></div>
-        <div className="empty-position"><strong>—</strong><p>No paper positions are open.</p><small>Position tracking will display simulated entry, size, stop, target and unrealised P&amp;L when paper mode is configured.</small></div>
+        <div className="card-title-row"><div><h3>Paper position manager</h3><span className="tiny-tag">Local simulation · No exchange orders</span></div><span className="tiny-tag">{paperPositions.length} open</span></div>
+        <div className="paper-summary">
+          <div><small>UNREALISED P&amp;L · {symbol}</small><b className={paperOpenPnl >= 0 ? 'positive' : 'negative'}>{signed(paperOpenPnl, 4)} USDT</b></div>
+          <div><small>REALised P&amp;L · HISTORY</small><b className={paperRealisedPnl >= 0 ? 'positive' : 'negative'}>{signed(paperRealisedPnl, 4)} USDT</b></div>
+        </div>
+        <div className="paper-form">
+          <label>Quantity<input type="number" min="0.000001" step="any" value={paperQty} onChange={e => setPaperQty(e.target.value)} /></label>
+          <label>Stop-loss price <input type="number" min="0" step="any" placeholder="Optional" value={paperStop} onChange={e => setPaperStop(e.target.value)} /></label>
+          <label>Take-profit price <input type="number" min="0" step="any" placeholder="Optional" value={paperTarget} onChange={e => setPaperTarget(e.target.value)} /></label>
+          <div className="paper-actions"><button className="paper-long" onClick={() => openPaperPosition('LONG')} disabled={!displayedPrice}>Open simulated LONG</button><button className="paper-short" onClick={() => openPaperPosition('SHORT')} disabled={!displayedPrice}>Open simulated SHORT</button></div>
+          {paperMessage && <p className="paper-message">{paperMessage}</p>}
+          <small>Entries use the current displayed public price. P&amp;L excludes fees, funding, slippage and liquidation effects. This is an educational simulation only.</small>
+        </div>
+        <div className="paper-table-wrap"><h4>Open positions</h4>
+          {paperPositions.length ? <table className="paper-table"><thead><tr><th>MARKET / SIDE</th><th>ENTRY</th><th>LIVE P&amp;L</th><th>STOP</th><th>TARGET</th><th></th></tr></thead><tbody>{paperPositions.map(position => { const mark = position.symbol === symbol ? displayedPrice : null; const pnl = mark ? (mark - position.entryPrice) * position.quantity * (position.side === 'LONG' ? 1 : -1) : null; return <tr key={position.id}><td><b>{position.symbol}</b><small className={position.side === 'LONG' ? 'positive' : 'negative'}>{position.side}</small></td><td>{fmt(position.entryPrice, position.entryPrice < 1 ? 5 : 2)}</td><td className={pnl == null ? '' : pnl >= 0 ? 'positive' : 'negative'}>{pnl == null ? 'Switch market to mark' : signed(pnl, 4) + ' USDT'}</td><td>{position.stopLoss == null ? '—' : fmt(position.stopLoss, 2)}</td><td>{position.takeProfit == null ? '—' : fmt(position.takeProfit, 2)}</td><td><button className="paper-close" onClick={() => closePaperPosition(position.id)} disabled={!mark}>Close</button></td></tr> })}</tbody></table> : <div className="paper-empty">No simulated positions are open. Use the controls above to create a paper position.</div>}
+        </div>
+        <div className="paper-table-wrap"><h4>Closed simulation history</h4>
+          {paperHistory.length ? <table className="paper-table"><thead><tr><th>MARKET / SIDE</th><th>ENTRY</th><th>EXIT</th><th>RESULT</th><th>REASON</th></tr></thead><tbody>{paperHistory.slice(0, 10).map(position => <tr key={position.id + position.exitTime}><td><b>{position.symbol}</b><small>{position.side}</small></td><td>{fmt(position.entryPrice, 2)}</td><td>{fmt(position.exitPrice, 2)}</td><td className={position.realisedPnl >= 0 ? 'positive' : 'negative'}>{signed(position.realisedPnl, 4)} USDT</td><td>{position.closeReason}</td></tr>)}</tbody></table> : <div className="paper-empty">Closed paper positions will appear here.</div>}
+        </div>
       </article>
     </section>
 
