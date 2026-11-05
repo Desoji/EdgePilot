@@ -107,3 +107,9 @@ pytest tests -q
 3. Build a separate paper-only simulator with audit logs, simulated position sizing and hard risk limits
 
 No private API keys or account credentials are needed for this version. Never commit secrets to this public repository.
+
+## Rules-based paper market outlook
+
+The Futures Analysis screen includes a directional market-context panel for the selected linear perpetual pair. It displays LONG BIAS, SHORT BIAS, or WAIT using the existing weighted multi-timeframe analysis. Directional bias requires a confluence score threshold and agreement between the 4H and 1H context, with a 15M conflict filter. The panel also displays the indicator readings behind the assessment.
+
+This is an educational, rules-based market-context filter, not a validated prediction model, financial advice, win probability, or guarantee. It does not place orders or connect to private exchange APIs. Any position management remains local paper simulation only.
