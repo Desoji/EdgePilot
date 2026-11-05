@@ -136,7 +136,7 @@ def analyse(candles: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 async def get_candles(client: httpx.AsyncClient, symbol: str, interval: str,
-                      limit: int) -> list[dict[str, Any]]:
+                      limit: int, category: str = "spot") -> list[dict[str, Any]]:
     try:
         response = await client.get(
             f"{BYBIT_URL}/v5/market/kline",
@@ -235,6 +235,87 @@ async def backtest(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"symbol": symbol, "interval": interval, "candles_tested": len(candles), **result}
+
+
+@app.get("/api/futures/analysis")
+async def futures_analysis(
+    symbol: str = Query("BTCUSDT", min_length=5, max_length=20, pattern="^[A-Z0-9]+$"),
+    interval: str = Query("15"),
+    limit: int = Query(160, ge=60, le=500),
+) -> dict[str, Any]:
+    """Educational analysis of Bybit linear USDT perpetual public market data."""
+    if interval not in VALID_INTERVALS:
+        raise HTTPException(status_code=400, detail="Interval must be 5, 15, 60 or 240.")
+    async with httpx.AsyncClient() as client:
+        candles, timeframe_results, ticker_response = await asyncio.gather(
+            get_candles(client, symbol, interval, limit, category="linear"),
+            asyncio.gather(*(
+                get_candles(client, symbol, tf, 160, category="linear")
+                for tf, _ in TIMEFRAMES
+            )),
+            client.get(
+                f"{BYBIT_URL}/v5/market/tickers",
+                params={"category": "linear", "symbol": symbol},
+                timeout=15.0,
+            ),
+        )
+    if len(candles) < 55:
+        raise HTTPException(status_code=502, detail="Insufficient linear futures candle history.")
+    try:
+        ticker_response.raise_for_status()
+        ticker_payload = ticker_response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Futures ticker request failed: {exc}") from exc
+    if ticker_payload.get("retCode") != 0:
+        raise HTTPException(status_code=502, detail=ticker_payload.get("retMsg", "Futures ticker provider error"))
+    ticker_rows = ticker_payload.get("result", {}).get("list", [])
+    if not ticker_rows:
+        raise HTTPException(status_code=404, detail="No linear futures ticker found for this symbol.")
+    ticker = ticker_rows[0]
+    timeframe_context = {}
+    weighted_score = 0.0
+    weight_total = 0.0
+    for (tf, label), tf_candles in zip(TIMEFRAMES, timeframe_results):
+        if len(tf_candles) < 55:
+            continue
+        tf_reading = analyse(tf_candles)
+        timeframe_context[label] = {
+            "bias": tf_reading["bias"],
+            "score": tf_reading["score"],
+            "structure": tf_reading["structure"],
+        }
+        weighted_score += tf_reading["score"] * WEIGHTS[label]
+        weight_total += WEIGHTS[label]
+    reading = analyse(candles)
+    weighted_score = round(weighted_score / weight_total, 1) if weight_total else 0.0
+    bias = "Bullish" if weighted_score >= 25 else "Bearish" if weighted_score <= -25 else "Mixed"
+
+    def optional_float(key: str) -> float | None:
+        value = ticker.get(key)
+        try:
+            return float(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    recent = candles[-96:]
+    return {
+        "symbol": symbol,
+        "category": "linear",
+        "interval": interval,
+        "candles": candles,
+        "day_high": max(c["high"] for c in recent),
+        "day_low": min(c["low"] for c in recent),
+        "analysis": {**reading, "bias": bias, "score": weighted_score, "timeframes": timeframe_context},
+        "derivatives": {
+            "mark_price": optional_float("markPrice"),
+            "index_price": optional_float("indexPrice"),
+            "funding_rate": optional_float("fundingRate"),
+            "open_interest": optional_float("openInterest"),
+            "next_funding_time": ticker.get("nextFundingTime"),
+        },
+        "data_source": "Bybit public linear USDT perpetual market data",
+        "disclaimer": "Educational market context only. Funding and open interest are contextual metrics, not directional trade instructions. No leverage or order execution is provided.",
+    }
 
 
 from app.analysis.hybrid import analyse_hybrid
