@@ -25,3 +25,29 @@
 .empty-position small{max-width:230px;color:#7f889d;font-size:9px;line-height:1.6}
 @media(max-width:1050px){.live-market-grid{grid-template-columns:1fr 1fr}.position-monitor{grid-column:1/-1}.empty-position{min-height:130px}}
 @media(max-width:680px){.live-market-grid{grid-template-columns:1fr}.position-monitor{grid-column:auto}}
+
+.paper-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 14px}
+.paper-summary>div{display:flex;flex-direction:column;gap:5px;padding:10px;background:#171d2a;border:1px solid #293044;border-radius:6px}
+.paper-summary small{font-size:8px;color:#7f889d;letter-spacing:.06em}
+.paper-summary b{font-size:13px;font-variant-numeric:tabular-nums}
+.paper-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px;background:#0e131e;border:1px solid #252d40;border-radius:7px}
+.paper-form label{display:flex;flex-direction:column;gap:5px;color:#8791a7;font-size:9px}
+.paper-form input{width:100%;min-width:0;padding:8px 9px;border:1px solid #30384d;border-radius:5px;background:#151b28;color:#e5e9f3;font-size:11px;outline:none}
+.paper-form input:focus{border-color:#8274d9}
+.paper-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.paper-actions button,.paper-close{border:0;border-radius:5px;padding:9px 10px;font-size:10px;font-weight:650;cursor:pointer}
+.paper-actions button:disabled,.paper-close:disabled{opacity:.45;cursor:not-allowed}
+.paper-long{background:#1d604b;color:#baf4dc}.paper-short{background:#6a303c;color:#ffd1d7}
+.paper-message{grid-column:1/-1;margin:0;color:#b4a9f3;font-size:9px;line-height:1.5}
+.paper-form>small{grid-column:1/-1;color:#778198;font-size:8px;line-height:1.55}
+.paper-table-wrap{margin-top:15px;min-width:0}
+.paper-table-wrap h4{margin:0 0 8px;color:#c9cfdd;font-size:10px}
+.paper-table{width:100%;border-collapse:collapse;font-size:9px;white-space:nowrap}
+.paper-table th{padding:7px 6px;text-align:left;color:#768198;font-size:8px;font-weight:550;border-bottom:1px solid #2a3144}
+.paper-table td{padding:8px 6px;color:#b9c1d2;border-bottom:1px solid #222a3a;font-variant-numeric:tabular-nums}
+.paper-table td:first-child{display:table-cell}
+.paper-table td:first-child small{display:block;margin-top:3px;color:#8791a7;font-size:8px}
+.paper-close{padding:5px 8px;background:#30384b;color:#e3e7f0}
+.paper-empty{padding:15px 8px;color:#7f889d;font-size:9px;text-align:center;border:1px dashed #30384b;border-radius:5px}
+.paper-table-wrap{overflow-x:auto}
+@media(max-width:680px){.paper-form{grid-template-columns:1fr}.paper-actions{grid-template-columns:1fr 1fr}.paper-summary{grid-template-columns:1fr 1fr}}
