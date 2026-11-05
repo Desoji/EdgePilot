@@ -169,28 +169,23 @@ export default function FuturesAnalysis() {
 
   useEffect(() => {
     if (!displayedPrice || !Number.isFinite(displayedPrice)) return
-    setPaperPositions(current => {
-      const stillOpen = []
-      const newlyClosed = []
-      for (const position of current) {
-        if (position.symbol !== symbol) {
-          stillOpen.push(position)
-          continue
-        }
-        const hitStop = position.stopLoss != null && (position.side === 'LONG' ? displayedPrice <= position.stopLoss : displayedPrice >= position.stopLoss)
-        const hitTarget = position.takeProfit != null && (position.side === 'LONG' ? displayedPrice >= position.takeProfit : displayedPrice <= position.takeProfit)
-        if (!hitStop && !hitTarget) {
-          stillOpen.push(position)
-          continue
-        }
-        const exitPrice = hitStop ? position.stopLoss : position.takeProfit
-        const direction = position.side === 'LONG' ? 1 : -1
-        newlyClosed.push({ ...position, exitPrice, exitTime: new Date().toISOString(), closeReason: hitStop ? 'Stop-loss' : 'Take-profit', realisedPnl: (exitPrice - position.entryPrice) * position.quantity * direction })
-      }
-      if (newlyClosed.length) setPaperHistory(history => [...newlyClosed, ...history].slice(0, 50))
-      return stillOpen
+    const newlyClosed = []
+    const stillOpen = paperPositions.filter(position => {
+      if (position.symbol !== symbol) return true
+      const hitStop = position.stopLoss != null && (position.side === 'LONG' ? displayedPrice <= position.stopLoss : displayedPrice >= position.stopLoss)
+      const hitTarget = position.takeProfit != null && (position.side === 'LONG' ? displayedPrice >= position.takeProfit : displayedPrice <= position.takeProfit)
+      if (!hitStop && !hitTarget) return true
+      const exitPrice = hitStop ? position.stopLoss : position.takeProfit
+      const direction = position.side === 'LONG' ? 1 : -1
+      newlyClosed.push({ ...position, exitPrice, exitTime: new Date().toISOString(), closeReason: hitStop ? 'Stop-loss' : 'Take-profit', realisedPnl: (exitPrice - position.entryPrice) * position.quantity * direction })
+      return false
     })
-  }, [displayedPrice, symbol])
+    if (newlyClosed.length) {
+      setPaperPositions(stillOpen)
+      setPaperHistory(history => [...newlyClosed, ...history].slice(0, 50))
+      setPaperMessage(newlyClosed.length + ' paper position(s) closed by stop-loss or take-profit.')
+    }
+  }, [displayedPrice, symbol, paperPositions])
 
   const openPaperPosition = side => {
     const quantity = Number(paperQty)
