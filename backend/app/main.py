@@ -235,3 +235,31 @@ async def backtest(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"symbol": symbol, "interval": interval, "candles_tested": len(candles), **result}
+
+
+from app.analysis.hybrid import analyse_hybrid
+
+
+@app.get("/api/market/hybrid")
+async def hybrid_market_analysis(
+    symbol: str = Query("BTCUSDT", min_length=5, max_length=20, pattern="^[A-Z0-9]+$"),
+) -> dict[str, Any]:
+    """Return descriptive hybrid analysis from 4H, 1H, 15M and 5M public spot candles."""
+    async with httpx.AsyncClient() as client:
+        results = await asyncio.gather(
+            *(get_candles(client, symbol, interval, 200) for interval, _ in TIMEFRAMES)
+        )
+    timeframe_data: dict[str, list[dict[str, Any]]] = {}
+    for (_, label), candles in zip(TIMEFRAMES, results):
+        if len(candles) >= 55:
+            timeframe_data[label] = candles
+    try:
+        analysis = analyse_hybrid(timeframe_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "symbol": symbol,
+        "analysis": analysis,
+        "data_source": "Bybit public spot market data",
+        "disclaimer": "Educational market context only. Not financial advice, a trade instruction, or a probability of success.",
+    }
