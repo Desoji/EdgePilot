@@ -33,6 +33,10 @@ export default function FuturesAnalysis() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updated, setUpdated] = useState(null)
+  const [liveTicker, setLiveTicker] = useState(null)
+  const [orderBook, setOrderBook] = useState({ bids: [], asks: [] })
+  const [recentTrades, setRecentTrades] = useState([])
+  const [feedStatus, setFeedStatus] = useState('CONNECTING')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -55,8 +59,87 @@ export default function FuturesAnalysis() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  useEffect(() => {
+    let socket
+    let reconnectTimer
+    let stopped = false
+    const applyBookSide = (current, updates, snapshot) => {
+      const next = new Map(snapshot ? [] : current.map(level => [level[0], level[1]]))
+      for (const [price, size] of updates || []) {
+        if (Number(size) === 0) next.delete(price)
+        else next.set(price, size)
+      }
+      return [...next.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))
+    }
+    const connect = () => {
+      if (stopped) return
+      setFeedStatus('CONNECTING')
+      socket = new WebSocket('wss://stream.bybit.com/v5/public/linear')
+      socket.onopen = () => {
+        setFeedStatus('LIVE')
+        socket.send(JSON.stringify({ op: 'subscribe', args: [
+          'tickers.' + symbol,
+          'orderbook.50.' + symbol,
+          'publicTrade.' + symbol,
+          'kline.' + interval + '.' + symbol
+        ] }))
+      }
+      socket.onmessage = event => {
+        let message
+        try { message = JSON.parse(event.data) } catch { return }
+        if (!message.topic || !message.data) return
+        if (message.topic.startsWith('tickers.')) {
+          setLiveTicker(current => ({ ...(current || {}), ...message.data }))
+        } else if (message.topic.startsWith('orderbook.')) {
+          const snapshot = message.type === 'snapshot'
+          setOrderBook(current => ({
+            bids: applyBookSide(current.bids, message.data.b, snapshot).sort((a, b) => Number(b[0]) - Number(a[0])).slice(0, 12),
+            asks: applyBookSide(current.asks, message.data.a, snapshot).sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 12)
+          }))
+        } else if (message.topic.startsWith('publicTrade.')) {
+          setRecentTrades(current => [...message.data, ...current].slice(0, 30))
+        } else if (message.topic.startsWith('kline.')) {
+          setData(current => {
+            if (!current) return current
+            const updates = Array.isArray(message.data) ? message.data : [message.data]
+            const next = [...(current.candles || [])]
+            for (const item of updates) {
+              const candle = {
+                timestamp: Math.floor(Number(item.start) / 1000),
+                open: Number(item.open), high: Number(item.high), low: Number(item.low),
+                close: Number(item.close), volume: Number(item.volume)
+              }
+              const index = next.findIndex(row => row.timestamp === candle.timestamp)
+              if (index >= 0) next[index] = candle
+              else next.push(candle)
+            }
+            return { ...current, candles: next.slice(-160) }
+          })
+          setUpdated(new Date())
+        }
+      }
+      socket.onerror = () => setFeedStatus('RECONNECTING')
+      socket.onclose = () => {
+        if (!stopped) {
+          setFeedStatus('RECONNECTING')
+          reconnectTimer = window.setTimeout(connect, 2500)
+        }
+      }
+    }
+    setLiveTicker(null)
+    setOrderBook({ bids: [], asks: [] })
+    setRecentTrades([])
+    connect()
+    return () => {
+      stopped = true
+      window.clearTimeout(reconnectTimer)
+      if (socket && socket.readyState < WebSocket.CLOSING) socket.close()
+    }
+  }, [symbol, interval])
+
   const candles = data?.candles || []
   const latest = candles[candles.length - 1]
+  const displayedPrice = liveTicker?.lastPrice ? Number(liveTicker.lastPrice) : latest?.close
   const previous = candles[candles.length - 2]
   const change = latest && previous ? (latest.close - previous.close) / previous.close * 100 : null
   const analysis = data?.analysis
@@ -66,7 +149,7 @@ export default function FuturesAnalysis() {
   return <div className="futures-page">
     <header className="topbar">
       <div><div className="breadcrumb">Workspace <span>/</span> Futures</div><h1>Futures analysis</h1></div>
-      <div className="topbar-right"><span className="data-pill"><i /> Public derivatives data</span><button className="refresh-button" onClick={refresh} disabled={loading}><span>{loading ? '◌' : '↻'}</span> Refresh</button></div>
+      <div className="topbar-right"><span className={'data-pill ' + (feedStatus === 'LIVE' ? 'feed-live' : '')}><i /> {feedStatus === 'LIVE' ? 'Live public feed' : feedStatus + ' · public feed'}</span><button className="refresh-button" onClick={refresh} disabled={loading}><span>{loading ? '◌' : '↻'}</span> Refresh</button></div>
     </header>
 
     <div className="notice"><b>i</b><p><strong>Research environment.</strong> This page reads public Bybit USDT perpetual data. It does not connect to a trading account, recommend leverage, or place orders. Funding and open interest are context metrics, not predictions.</p></div>
@@ -80,12 +163,12 @@ export default function FuturesAnalysis() {
     {error && <div className="error-panel"><strong>Could not load futures data</strong><span>{error}</span><small>Confirm the backend is running at {API} and the symbol is supported by Bybit linear markets.</small></div>}
 
     <section className="price-heading">
-      <div><span className="eyebrow">LINEAR PERPETUAL · {symbol}</span><div className="price-line"><strong>{latest ? fmt(latest.close, latest.close < 1 ? 5 : 2) : '—'}</strong><span className="currency">USDT</span>{change != null && <span className={'change ' + (change >= 0 ? 'positive' : 'negative')}>{signed(change)}%</span>}</div></div>
+      <div><span className="eyebrow">LINEAR PERPETUAL · {symbol}</span><div className="price-line"><strong>{displayedPrice != null ? fmt(displayedPrice, displayedPrice < 1 ? 5 : 2) : '—'}</strong><span className="currency">USDT</span>{change != null && <span className={'change ' + (change >= 0 ? 'positive' : 'negative')}>{signed(change)}%</span>}</div></div>
       <span className="updated-label">{updated ? 'Updated ' + updated.toLocaleTimeString() : 'Awaiting connection'}</span>
     </section>
 
     <section className="chart-panel">
-      <div className="panel-heading"><div><h2>Perpetual price movement</h2><p>Recent closing prices · {intervals.find(x => x.value === interval)?.label}</p></div><span className="live-label"><i /> {loading ? 'UPDATING' : 'CONNECTED'}</span></div>
+      <div className="panel-heading"><div><h2>Perpetual price movement</h2><p>Recent closing prices · {intervals.find(x => x.value === interval)?.label}</p></div><span className={'live-label ' + (feedStatus === 'LIVE' ? 'feed-live' : '')}><i /> {feedStatus}</span></div>
       <div className="chart-wrap">{loading && !candles.length ? <div className="chart-empty">Loading futures market data…</div> : <FuturesChart candles={candles} />}</div>
       <div className="chart-footer"><span>{candles.length ? new Date(candles[0].timestamp * 1000).toLocaleString() : '—'}</span><span>{latest ? new Date(latest.timestamp * 1000).toLocaleString() : '—'}</span></div>
     </section>
@@ -95,6 +178,28 @@ export default function FuturesAnalysis() {
       <FuturesMetric label="INDEX PRICE" value={fmt(derivatives.index_price, 2)} detail="Underlying index reference · USDT" />
       <FuturesMetric label="FUNDING RATE" value={derivatives.funding_rate == null ? '—' : signed(derivatives.funding_rate * 100, 4) + '%'} detail="Current rate · next settlement is exchange-defined" />
       <FuturesMetric label="OPEN INTEREST" value={derivatives.open_interest == null ? '—' : fmt(derivatives.open_interest, 2)} detail="Displayed in contract units by provider" />
+    </section>
+
+
+    <section className="live-market-grid">
+      <article className="live-panel">
+        <div className="card-title-row"><div><h3>Live order book</h3><span className="tiny-tag">Top 12 · USDT</span></div><span className="stream-state">{feedStatus}</span></div>
+        <div className="book-head"><span>PRICE (USDT)</span><span>SIZE</span></div>
+        <div className="book-side asks">{orderBook.asks.slice().reverse().map(([price, size]) => <div className="book-row" key={'a' + price}><b>{fmt(price, Number(price) < 1 ? 5 : 2)}</b><span>{fmt(size, 3)}</span></div>)}</div>
+        <div className="book-mid">{liveTicker?.bid1Price && liveTicker?.ask1Price ? <><b>{fmt(liveTicker.bid1Price, 2)} / {fmt(liveTicker.ask1Price, 2)}</b><small>Best bid / ask</small></> : 'Waiting for quotes'}</div>
+        <div className="book-side bids">{orderBook.bids.map(([price, size]) => <div className="book-row" key={'b' + price}><b>{fmt(price, Number(price) < 1 ? 5 : 2)}</b><span>{fmt(size, 3)}</span></div>)}</div>
+      </article>
+      <article className="live-panel">
+        <div className="card-title-row"><div><h3>Recent market trades</h3><span className="tiny-tag">Public trade stream</span></div><span className="tiny-tag">{recentTrades.length} updates</span></div>
+        <div className="trade-head"><span>PRICE</span><span>SIZE</span><span>TIME</span></div>
+        <div className="trade-list">{recentTrades.slice(0, 18).map((trade, index) => <div className="trade-row" key={(trade.i || '') + '-' + index}><b className={trade.S === 'Buy' ? 'positive' : 'negative'}>{fmt(trade.p, Number(trade.p) < 1 ? 5 : 2)}</b><span>{fmt(trade.v, 3)}</span><small>{new Date(Number(trade.T)).toLocaleTimeString()}</small></div>)}
+          {!recentTrades.length && <div className="chart-empty">Waiting for public trades…</div>}
+        </div>
+      </article>
+      <article className="live-panel position-monitor">
+        <div className="card-title-row"><div><h3>Position monitor</h3><span className="tiny-tag">Paper environment</span></div><span className="tiny-tag">No active positions</span></div>
+        <div className="empty-position"><strong>—</strong><p>No paper positions are open.</p><small>Position tracking will display simulated entry, size, stop, target and unrealised P&amp;L when paper mode is configured.</small></div>
+      </article>
     </section>
 
     <section className="analysis-section">
