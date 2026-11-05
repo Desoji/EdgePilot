@@ -1,0 +1,1 @@
+"""Hybrid market-analysis modules."""
