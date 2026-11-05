@@ -8,7 +8,8 @@ A local educational cryptocurrency market-analysis workspace. This starter relea
 - FastAPI backend
 - Public Bybit spot-market kline data (no API key required)
 - EMA 20/50, RSI 14, MACD histogram, ATR 14, relative volume, confirmed swing pivots, BOS / CHoCH context
-- 4H / 1H / 15M / 5M confluence view\n- Dedicated USDT linear perpetual futures analysis page with public funding-rate, mark/index-price and open-interest context
+- 4H / 1H / 15M / 5M confluence view
+- Dedicated USDT linear perpetual futures analysis page with public funding-rate, mark/index-price and open-interest context
 - Local-first operation
 
 **Important:** EdgePilot is an educational research tool, not financial advice. Its confluence score is not a probability or a guaranteed win rate. This project does not connect to private account endpoints or place real-money orders.
@@ -72,7 +73,17 @@ $env:PYTHONPATH = "."
 pytest ../tests -q
 ```
 
-## Futures analysis endpoint\n\nThe dashboard includes a Futures Analysis page backed by `GET /api/futures/analysis?symbol=BTCUSDT&interval=15`. It uses Bybit public linear (USDT perpetual) candles and ticker data to display price movement, mark price, index price, funding rate, open interest, selected-interval indicators and weighted multi-timeframe context. This page is educational only: it does not connect to a trading account, suggest leverage, or place orders.\n\n## Hybrid analysis endpoint
+## Futures analysis endpoint
+
+The dashboard includes a Futures Analysis page backed by `GET /api/futures/analysis?symbol=BTCUSDT&interval=15`. It uses Bybit public linear (USDT perpetual) candles and ticker data. The browser also subscribes to Bybit's public linear WebSocket for live ticker, order-book, recent-trade and selected-timeframe kline updates. The page displays mark/index price, funding, open interest, indicator readings and weighted multi-timeframe context. The position monitor is a paper-mode placeholder. No account credentials, leverage controls or real order execution are supported.
+
+
+
+### Live futures feed
+
+The Futures page opens a public WebSocket connection to `wss://stream.bybit.com/v5/public/linear` and subscribes to the selected contract's ticker, order book, public trades and kline stream. It reconnects after a dropped connection and clears/re-subscribes when the contract or interval changes. This is public read-only market data; the position panel does not represent exchange positions.
+
+## Hybrid analysis endpoint
 
 The research API also exposes GET /api/market/hybrid?symbol=BTCUSDT. It retrieves 4H, 1H, 15M and 5M candles and returns weighted descriptive context using EMA alignment, RSI, confirmed swing pivots, basic trend classification, break-of-structure context and relative volume. Pivots are only considered after the configured right-side confirmation candles have elapsed. The score is not a probability, prediction guarantee or instruction to trade.
 
