@@ -7,7 +7,7 @@ A local educational cryptocurrency market-analysis workspace. This starter relea
 - React + Vite dashboard
 - FastAPI backend
 - Public Bybit spot-market kline data (no API key required)
-- EMA 20/50, RSI 14, MACD histogram, ATR 14, relative volume and swing-structure context
+- EMA 20/50, RSI 14, MACD histogram, ATR 14, relative volume, confirmed swing pivots, BOS / CHoCH context
 - 4H / 1H / 15M / 5M confluence view
 - Local-first operation
 
@@ -72,10 +72,21 @@ $env:PYTHONPATH = "."
 pytest ../tests -q
 ```
 
+## Hybrid analysis endpoint
+
+The research API also exposes GET /api/market/hybrid?symbol=BTCUSDT. It retrieves 4H, 1H, 15M and 5M candles and returns weighted descriptive context using EMA alignment, RSI, confirmed swing pivots, basic trend classification, break-of-structure context and relative volume. Pivots are only considered after the configured right-side confirmation candles have elapsed. The score is not a probability, prediction guarantee or instruction to trade.
+
+Run the hybrid-analysis unit tests from the backend folder:
+
+```powershell
+$env:PYTHONPATH = "."
+pytest tests -q
+```
+
 ## Next stages
 
-1. Expand tests for candle normalization, fees, slippage and edge cases
-2. Add historical storage and walk-forward / out-of-sample evaluation
-3. Build a separate paper-only simulator with audit logs, position sizing and hard risk limits
+1. Compare hybrid strategy results with the EMA baseline using walk-forward and out-of-sample tests
+2. Add historical storage and more realistic execution assumptions
+3. Build a separate paper-only simulator with audit logs, simulated position sizing and hard risk limits
 
 No private API keys or account credentials are needed for this version. Never commit secrets to this public repository.
